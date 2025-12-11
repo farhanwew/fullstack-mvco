@@ -58,6 +58,41 @@ export const fastApiService = {
     return response.data;
   },
 
+  // Stream Chat endpoint
+  async streamChat(message: string, onChunk: (chunk: string) => void) {
+    try {
+      const response = await fetch(`${FASTAPI_URL}/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ message }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) {
+        throw new Error('Response body is null');
+      }
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        const chunk = decoder.decode(value, { stream: true });
+        onChunk(chunk);
+      }
+    } catch (error) {
+      console.error('Stream chat error:', error);
+      throw error;
+    }
+  },
+
   // Recommendation endpoint
   async getRecommendation(
     modelName: string,

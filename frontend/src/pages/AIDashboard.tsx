@@ -183,20 +183,46 @@ const AIDashboard: React.FC = () => {
   const handleSendChat = async () => {
     if (!chatMessage.trim()) return;
 
-    setIsChatLoading(true);
     const userMessage = chatMessage;
     setChatMessage('');
+    setIsChatLoading(true);
+
+    // 1. Add User Message
     setChatHistory(prev => [...prev, { role: 'user', content: userMessage }]);
+    
+    // 2. Add Placeholder Assistant Message
+    setChatHistory(prev => [...prev, { role: 'assistant', content: '' }]);
 
     try {
-      const response = await fastApiService.chat(userMessage);
-      const aiResponse = response.response || response;
-      setChatResponse(aiResponse);
-      setChatHistory(prev => [...prev, { role: 'assistant', content: aiResponse }]);
+      let fullResponse = "";
+      
+      await fastApiService.streamChat(userMessage, (chunk) => {
+        fullResponse += chunk;
+        setChatHistory(prev => {
+          const newHistory = [...prev];
+          const lastIdx = newHistory.length - 1;
+          // Ensure we are updating the assistant's message
+          if (newHistory[lastIdx].role === 'assistant') {
+            newHistory[lastIdx] = { 
+              ...newHistory[lastIdx], 
+              content: fullResponse 
+            };
+          }
+          return newHistory;
+        });
+      });
+      
+      setChatResponse(fullResponse);
+
     } catch (error) {
       console.error('Chat failed:', error);
       setChatResponse('Error: Failed to get response from AI.');
-      setChatHistory(prev => [...prev, { role: 'assistant', content: 'Error: Failed to get response from AI.' }]);
+      setChatHistory(prev => {
+         const newHistory = [...prev];
+         const lastIdx = newHistory.length - 1;
+         newHistory[lastIdx] = { role: 'assistant', content: 'Error: Failed to get response from AI.' };
+         return newHistory;
+      });
     } finally {
       setIsChatLoading(false);
     }
